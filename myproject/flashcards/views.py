@@ -124,29 +124,56 @@ def read_sets(request):
 
 
 def edit_set(request):
-    sets = FlashcardSet.objects.all()
+    set_name = request.GET.get('set_name') if request.method == 'GET' else request.POST.get('set_name')
+
+    set_obj = FlashcardSet.objects.filter(name=set_name).first()
+    if not set_obj:
+        messages.error(request, 'Set not found')
+        return redirect('read_sets')
+
+    cards = Flashcard.objects.filter(set=set_obj)
 
     if request.method == 'POST':
-        set_name = request.POST.get('set_name')
         new_name = request.POST.get('new_name')
 
-        set_obj = FlashcardSet.objects.filter(name=set_name).first()
-        if not set_obj:
-            messages.error(request, 'Set not found')
-            return redirect('create_set')
-
         if not new_name.strip():
-            messages.error(request, 'New set name cannot be empty')
-        elif FlashcardSet.objects.filter(name__iexact=new_name).exclude(pk=set_obj.pk).exists():
-            messages.error(request, 'Set name already exists')
-        else:
-            set_obj.name = new_name
-            set_obj.save()
-            messages.success(request, f'Set \"{set_obj.name}\" was updated successfully')
-            return redirect('read_sets')
+            messages.error(request, 'Name cannot be empty')
+            return redirect(f'/seturi/set/edit/?set_name={set_name}')
 
-    return render(request, 'seturi/edit_set.html', {'sets': sets})
+        if FlashcardSet.objects.filter(name__iexact=new_name).exclude(pk=set_obj.pk).exists():
+            messages.error(request, 'Name already exists')
+            return redirect(f'/seturi/set/edit/?set_name={set_name}')
 
+        set_obj.name = new_name
+        set_obj.save()
+
+        for card in cards:
+            if request.POST.get(f"delete_{card.id}"):
+                card.delete()
+                continue
+
+            q = request.POST.get(f"question_{card.id}")
+            a = request.POST.get(f"answer_{card.id}")
+
+            if q and a:
+                card.question = q
+                card.answer = a
+                card.save()
+
+        new_questions = request.POST.getlist('new_question')
+        new_answers = request.POST.getlist('new_answer')
+
+        for q, a in zip(new_questions, new_answers):
+            if q.strip() and a.strip():
+                Flashcard.objects.create(set=set_obj, question=q, answer=a)
+
+        messages.success(request, 'Set updated successfully')
+        return redirect('view_set')
+
+    return render(request, 'seturi/edit_set.html', {
+        "set": set_obj,
+        "cards": cards
+    })
 
 def delete_set(request):
     if request.method == 'POST':
@@ -158,3 +185,14 @@ def delete_set(request):
     sets = FlashcardSet.objects.all()
     return render(request, 'seturi/delete_set.html', {'sets': sets})
 
+def view_set(request):
+    set_name = request.GET.get('set_name') or request.GET.get('set_name')
+
+    if not set_name:
+        messages.error(request, 'No set selected.')
+        return redirect('read_sets')
+
+    set_obj = get_object_or_404(FlashcardSet, name=set_name)
+    cards = Flashcard.objects.filter(set=set_obj)
+
+    return render(request, 'seturi/view_set.html', {"set": set_obj, "cards": cards})
