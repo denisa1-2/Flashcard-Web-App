@@ -17,3 +17,12 @@ class Flashcard(models.Model):
 
     def __str__(self):
         return self.question
+
+class FlashcardProgress(models.Model):
+    set = models.ForeignKey(FlashcardSet, on_delete=models.CASCADE)
+    completed = models.IntegerField(default=0)
+    total = models.IntegerField(default=0)
+    percentage = models.FloatField(default=0)
+
+    def __str__(self):
+        return  f"{self.set.name} - {self.percentage}%"

@@ -1,8 +1,10 @@
+from functools import total_ordering
+
 from django.http import Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 
-from .models import FlashcardSet, Flashcard
+from .models import FlashcardSet, Flashcard, FlashcardProgress
 from django import forms
 
 predefined_sets = {
@@ -364,7 +366,36 @@ def quiz_stop(request):
 def quiz_finished(request):
     quiz = request.session.get("quiz_state")
 
-    if "quiz_state" in request.session:
+    # if "quiz_state" in request.session:
+    #     del request.session["quiz_state"]
+    #
+    # return render(request, "quiz/quiz_finished.html", {"quiz": quiz})
+
+    if quiz:
+        set_id = quiz.get("set_id")
+        set_obj = FlashcardSet.objects.get(id=set_id)
+
+        completed = quiz.get("current_index", 0)
+        total = len(quiz.get("card_ids", []))
+
+
+        parcentage = round((completed / total) * 100, 2) if total > 0 else 0
+
+        FlashcardProgress.objects.get_or_create(
+            set=set_obj,
+            defaults={
+                "completed": completed,
+                "total": total,
+                "percentage": parcentage,
+            }
+        )
+
+
         del request.session["quiz_state"]
 
-    return render(request, "quiz/quiz_finished.html", {"quiz": quiz})
+    return render(request, "quiz/quiz_finished.html")
+
+def my_progress(request):
+    progress_list = FlashcardProgress.objects.all()
+
+    return render(request, "progress/my_progress.html", {"progress_list": progress_list})
