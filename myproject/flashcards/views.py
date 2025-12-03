@@ -317,16 +317,19 @@ def take_quiz(request):
 
     if request.method == "POST":
         user_answer = request.POST.get("answer","").strip()
+        correct_answer = (card.answer or "").strip()
 
         if user_answer != "":
-            correct_answer = (card.answer or "").strip()
 
             if user_answer.lower() == correct_answer.lower():
                 status = "correct"
+                quiz["correct_count"] = quiz.get("correct_count", 0) + 1
             else:
                 status = "incorrect"
         else:
             status = None
+        request.session["quiz_state"] = quiz
+
 
     context = {
         "set_id": quiz["set_id"],
@@ -375,21 +378,21 @@ def quiz_finished(request):
         set_id = quiz.get("set_id")
         set_obj = FlashcardSet.objects.get(id=set_id)
 
-        completed = quiz.get("current_index", 0)
+        #completed = quiz.get("current_index", 0)
         total = len(quiz.get("card_ids", []))
+        correct = quiz.get("correct_count", 0)
 
 
-        parcentage = round((completed / total) * 100, 2) if total > 0 else 0
+        parcentage = round((correct / total) * 100, 2) if total > 0 else 0
 
-        FlashcardProgress.objects.get_or_create(
+        FlashcardProgress.objects.update_or_create(
             set=set_obj,
             defaults={
-                "completed": completed,
+                "completed": correct,
                 "total": total,
                 "percentage": parcentage,
             }
         )
-
 
         del request.session["quiz_state"]
 
