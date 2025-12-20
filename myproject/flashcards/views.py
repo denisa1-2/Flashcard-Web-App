@@ -5,67 +5,24 @@ from django.contrib import messages
 from .models import FlashcardSet, Flashcard
 from django import forms
 
-predefined_sets = {
-    "POO": {
-        "title": "POO Basisc",
-        "cards": [
-            {"question": "Ce este un obiect?", "answer": "O instanta a unei clase."},
-            {"question": "Ce este o clasa?", "answer": "Un sablon pentru crearea obiectelor."},
-            {"question": "Ce este mostenirea", "answer": "Mecanismul prin care o clasa preia proprietati si metode din alta clasa."},
-            {"question": "Ce este polimorfismul?", "answer": "Capacitatea aceleiasi metode de a se comporta diferit in functie de context."},
-            {"question": "Ce este o interfata?", "answer": "Un tip care defineste doar metode fara implementare."},
-            {"question": "Ce este overriding-ul?", "answer": "Redefinirea unei metode mostenite in clasa copil."},
-            {"question": "Ce este overloading-ul?", "answer": "Definirea mai multor metode cu acelasi nume, dar parametri diferiti."}
-        ]
-    },
-    "python": {
-        "title": "Python Basics",
-        "cards": [
-            {"question": "Ce este o lista in Python?", "answer": "O colectie ordonata si modificabila de elemente."},
-            {"question": "Ce este 'None'?", "answer": "O constanta care reprezinta absenta unei valori."},
-            {"question": "Ce este un modul?", "answer": "Un fisier Python ce contine variabile, functii sau clase reutilizabile."},
-            {"question": "Ce este un dictionar?", "answer": "O colectie de perechi cheie-valoare."},
-            {"question": "Ce face functia pop()?", "answer": "Sterge si returneaza ultimul elemnet din lista."},
-            {"question": "Ce tip de date returneaza functia input()?", "answer": "Intotdeauna un string."},
-            {"question": "Ce este list comprehension?", "answer": "O metoda scurta de a crea liste folosind expresii."}
-        ]
-    },
-    "cyber": {
-        "title": "Cybersecurity",
-        "cards": [
-            {"question": "Ce este cybersecurity?", "answer": "Protejarea sistemelor si datelor impotriva atacurilor."},
-            {"question": "Ce este un firewall?", "answer": "Un sistem care filtreaza traficul de retea."},
-            {"question": "Ce este malware?", "answer": "Software malitios creat pentru a provoca daune"},
-            {"question": "Ce este autentificare?", "answer": "Procesul prin care se verifica identitatea unui utilizator."},
-            {"question": "Ce este un atac DDoS?", "answer": "Suprasolicitarea unui server cu trafic pentru a-l bloca."},
-            {"question": "Ce este hashing-ul?", "answer": "Transformarea datelor intr-o valoare fixa, ireversibila."}
-        ]
-    },
+from .strategies.exact_match import ExactMatchStrategy
+from .strategies.quiz_evaluator import QuizEvaluator
 
-    "so": {
-        "title": "Sisteme de operare",
-        "cards": [
-            {"question": "Ce este un sistem de operare?", "answer": "Software care gestioneaza hardware-ul si ruleazaa aplicatiile."},
-            {"question": "Ce este un thread?", "answer": "Cea mai mica unitate de executie dintr-un proces."},
-            {"question": "Ce este memoria virtuala?", "answer": "Tehnica ce permite folosirea discului ca extensie a RAM-ului."},
-            {"question": "Ce este kernel-ul?", "answer": "Componenta centrala a sistemului de operare."},
-            {"question": "Ce este un deadlock?", "answer": "Situatie in care procesele se blocheaza reciproc."},
-            {"question": "Ce este un sistem de fisiere?", "answer": "Structura prin care OS-ul organizeaza si stocheaza fisierele."}
-        ]
-    }
-
-}
+from .services.predefined_loader import PredefinedLoader
 
 def predefined_list(request):
+    sets = PredefinedLoader().load_sets()
     return render(request, "seturi/predefined_sets.html", {
-        "sets": predefined_sets
+        "sets": sets
     })
 
 def predefined_set(request, set_key):
-    if set_key not in predefined_sets:
+    sets = PredefinedLoader().load_sets()
+
+    if set_key not in sets:
         raise Http404("Set not found")
 
-    selected_set = predefined_sets[set_key]
+    selected_set = sets[set_key]
     return render(request, "seturi/predefined_set.html",{
         "key": set_key,
         "title": selected_set["title"],
@@ -196,13 +153,13 @@ def view_set(request):
     return render(request, 'seturi/view_set.html', {"set": set_obj, "cards": cards})
 
 def pre_quiz_start(request, set_key):
-    if set_key not in predefined_sets:
+    sets = PredefinedLoader().load_sets()
+
+    if set_key not in sets:
         raise Http404("Set not found")
 
-    selected_set = predefined_sets[set_key]["cards"]
-
     request.session["pre_quiz"] = {
-        "cards": selected_set,
+        "cards": sets[set_key]["cards"],
         "current": 0,
         "finished": False,
         "set_key": set_key
@@ -223,17 +180,15 @@ def pre_take_quiz(request):
         return redirect("pre_quiz_finished")
 
     card = cards[index]
-
     status = None
 
     if request.method == "POST":
-        user_answer = request.POST.get("answer", "").strip().lower()
-        correct_answer = card["answer"].strip().lower()
+        user_answer = request.POST.get("answer", "").strip()
 
-        if user_answer == correct_answer:
-            status = "correct"
-        else:
-            status = "incorrect"
+        evaluator = QuizEvaluator(ExactMatchStrategy())
+        is_correct = evaluator.evaluate(user_answer, card["answer"])
+
+        status = "correct" if is_correct else "incorrect"
 
     return render(request, "quiz/predefined_take_quiz.html", {
         "card": card,
@@ -316,25 +271,13 @@ def take_quiz(request):
     if request.method == "POST":
         user_answer = request.POST.get("answer","").strip()
 
-        if user_answer != "":
-            correct_answer = (card.answer or "").strip()
+        if user_answer:
+            evaluator = QuizEvaluator(ExactMatchStrategy())
+            is_correct = evaluator.evaluate(user_answer, card.answer)
 
-            if user_answer.lower() == correct_answer.lower():
-                status = "correct"
-            else:
-                status = "incorrect"
-        else:
-            status = None
+            status = "correct" if is_correct else "incorrect"
 
-    context = {
-        "set_id": quiz["set_id"],
-        "card": card,
-        "current_index": current_index,
-        "total_cards": len(card_ids),
-        "status": status,
-    }
-
-    return render(request, "quiz/take_quiz.html", context)
+    return render(request, "quiz/take_quiz.html", {"card": card, "status": status, "current_index": current_index, "total_cards": len(card_ids),})
 
 def quiz_skip(request):
     quiz = request.session.get("quiz_state")
