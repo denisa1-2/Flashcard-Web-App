@@ -98,7 +98,13 @@
 
         {%for item in progress_list%}
             <div class="progress-item">
-                <div class="progress-title">{{item.set.name}}</div>
+                <div class="progress-title">
+                    {% if item.set %}
+                        {{item.set.name}}
+                    {% else %}
+                        {{item.predefined_key}}
+                    {% endif %}
+                </div>
 
                 <div class="progress-label">
                     {{item.percentage}}% completed
@@ -112,7 +118,11 @@
                 </div>
 
                 <div class="mt-3 text-end">
-                    <a href="{%url 'quiz_start'%}?set_name={{item.set.name}}" class="btn-green">Restart</a>
+                   {%if item.set%}
+                        <a href = "{%url 'quiz_start' %}?set_name={{item.set.name}}" class="btn-green">Restart</a>
+                    {%else%}
+                        <a href="%url 'pre_quiz_start item.predefined_key%}" class="btn-green">Restart</a>
+                    {%endif%}
                 </div>
             </div>
         {%endfor%}

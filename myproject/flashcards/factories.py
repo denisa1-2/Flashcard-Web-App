@@ -34,26 +34,3 @@ class UserFlashcardSetCreator(FlashcardSetCreator):
             Flashcard.objects.bulk_create(objs)
 
         return flashcard_set
-
-# class PredefinedFlashcardSetCreator(FlashcardSetCreator):
-#     def __init__(self, predefined_set: Dict[str, Any], set_key: str):
-#         self.predefined_set = predefined_set
-#         self.set_key = set_key
-#
-#     def create_set(self) -> FlashcardSet:
-#         data = self.predefined_set[self.set_key]
-#         title = (data.get("title") or "").strip()
-#
-#         flashcard_set = FlashcardSet.objects.create(name=title)
-#
-#         objs: List[Flashcard] = []
-#         for c in data.get("cards", []):
-#             q = (c.question or "").strip()
-#             a = (c.answer or "").strip()
-#             if q and a:
-#                 objs.append(Flashcard(set=flashcard_set, question=q, answer=a))
-#
-#         if objs:
-#             Flashcard.objects.bulk_create(objs)
-#
-#         return flashcard_set

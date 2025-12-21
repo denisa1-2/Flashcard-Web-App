@@ -161,6 +161,8 @@ def pre_quiz_start(request, set_key):
         "cards": sets[set_key]["cards"],
         "current": 0,
         "finished": False,
+        "correct_count": 0,
+        "set_key": set_key,
     }
 
     return redirect("pre_take_quiz")
@@ -187,6 +189,10 @@ def pre_take_quiz(request):
         is_correct = evaluator.evaluate(user_answer, card["answer"])
         status = "correct" if is_correct else "incorrect"
 
+        if is_correct:
+            quiz["correct_count"] += 1
+        request.session["pre_quiz"] = quiz
+
     return render(
         request,
         "quiz/predefined_take_quiz.html",
@@ -206,9 +212,35 @@ def pre_quiz_skip(request):
 
 
 def pre_quiz_finished(request):
-    request.session.pop("pre_quiz", None)
+    quiz = request.session.get("pre_quiz")
+
+    if quiz:
+        set_key = quiz["set_key"]
+        total = len(quiz["cards"])
+        correct = quiz.get("correct_count", 0)
+        percentage = round(correct / total * 100, 2) if total else 0
+
+        FlashcardProgress.objects.update_or_create(
+            predefined_key=set_key,
+            defaults={
+                "completed": correct,
+                "total": total,
+                "percentage": percentage,
+            }
+        )
+
+        del request.session["pre_quiz"]
+
     return render(request, "quiz/quiz_finished.html")
 
+def pre_quiz_stop(request):
+    quiz = request.session.get("pre_quiz")
+
+    if quiz:
+        quiz["finished"] = True
+        request.session["pre_quiz"] = quiz
+
+    return redirect("pre_quiz_finished")
 
 def start_quiz(request):
     set_name = request.GET.get("set_name")
@@ -292,6 +324,14 @@ def quiz_finished(request):
 
     return render(request, "quiz/quiz_finished.html")
 
+def quiz_stop(request):
+    quiz = request.session.get("quiz_state")
+
+    if quiz:
+        quiz["finished"] = True
+        request.session["quiz_state"] = quiz
+
+    return redirect("quiz_finished")
 
 def my_progress(request):
     progress_list = FlashcardProgress.objects.all()
