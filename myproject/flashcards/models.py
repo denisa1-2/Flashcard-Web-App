@@ -19,10 +19,13 @@ class Flashcard(models.Model):
         return self.question
 
 class FlashcardProgress(models.Model):
-    set = models.ForeignKey(FlashcardSet, on_delete=models.CASCADE)
+    set = models.ForeignKey(FlashcardSet, on_delete=models.CASCADE, null=True, blank=True)
+    predefined_key = models.CharField(max_length=50, null=True, blank=True)
     completed = models.IntegerField(default=0)
     total = models.IntegerField(default=0)
     percentage = models.FloatField(default=0)
 
     def __str__(self):
-        return  f"{self.set.name} - {self.percentage}%"
+        if self.set:
+            return f"User set: {self.set.name}"
+        return f"Predefined set: {self.predefined_key}"
